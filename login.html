@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,user-scalable=no"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>🇩🇪 bei TL — Đăng nhập</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/login.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  </head>
+  <body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="login-wrap">
+      <div class="card">
+        <div class="deco">
+          <div class="deco-dot"></div>
+          <div class="deco-dot"></div>
+          <div class="deco-dot"></div>
+        </div>
+        <button class="theme-btn" id="themeBtn"><i class="fa-solid fa-moon"></i></button>
+
+        <div class="logo-row">
+          <span class="flag">🇩🇪</span>
+          <div>
+            <div class="brand">bei <span>TL</span></div>
+            <div class="tagline">Luyện từ vựng tiếng Đức</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Form -->
+        <div id="formView">
+          <div class="err-msg" id="errMsg">
+            <i class="fa-solid fa-triangle-exclamation"></i> Tên đăng nhập hoặc mật khẩu không đúng
+          </div>
+
+          <div class="field">
+            <label>Tên đăng nhập</label>
+            <input
+              type="text"
+              id="username"
+              placeholder="Nhập tên đăng nhập..."
+              autocomplete="username"
+            />
+          </div>
+
+          <div class="field">
+            <label>Mật khẩu</label>
+            <div class="pw-wrap">
+              <input
+                type="password"
+                id="password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+              />
+              <button
+                class="pw-toggle"
+                id="pwToggle"
+                type="button"
+                tabindex="-1"
+              >
+                <i class="fa-regular fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="remember-row">
+            <label class="remember-label">
+              <input type="checkbox" id="remember" /> Ghi nhớ đăng nhập
+            </label>
+            <a href="#" class="forgot">Quên mật khẩu?</a>
+          </div>
+
+          <button class="btn-submit" id="loginBtn" type="button">
+            <span class="btn-inner">
+              <span class="spinner" id="spinner"></span>
+              <span id="btnText">Đăng nhập →</span>
+            </span>
+          </button>
+
+          <div class="or-row">hoặc</div>
+
+          <div class="new-user">
+            Chưa có tài khoản? <a href="#">Đăng ký ngay</a>
+          </div>
+        </div>
+
+        <!-- Success login -->
+        <div class="success-box" id="successView">
+          <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
+          <div class="success-msg">Đăng nhập thành công!</div>
+          <div class="success-sub">Đang chuyển hướng vào app...</div>
+        </div>
+
+        <!-- Success register -->
+        <div class="success-box" id="successRegView">
+          <div class="success-icon"><i class="fa-solid fa-champagne-glasses"></i></div>
+          <div class="success-msg">Đăng ký thành công!</div>
+          <div class="success-sub">Chào mừng bạn đến với bei TL!</div>
+        </div>
+
+        <!-- Forgot password form -->
+        <div id="forgotView" style="display: none">
+          <div class="back-row">
+            <button class="back-btn" id="backFromForgot">
+              <i class="fa-solid fa-arrow-left"></i> Quay lại đăng nhập
+            </button>
+          </div>
+          <div class="err-msg" id="forgotErrMsg"></div>
+          <div class="ok-msg" id="forgotOkMsg" style="display: none"></div>
+
+          <div id="forgotStep1">
+            <div class="field">
+              <label>Tên đăng nhập</label>
+              <input
+                type="text"
+                id="forgotUsername"
+                placeholder="Nhập tên đăng nhập..."
+                autocomplete="username"
+              />
+            </div>
+            <button
+              class="btn-submit"
+              id="forgotFindBtn"
+              type="button"
+              style="background: var(--gold); color: #0d1117"
+            >
+              <span class="btn-inner">
+                <span
+                  class="spinner"
+                  id="forgotSpinner"
+                  style="
+                    border-color: rgba(0, 0, 0, 0.2);
+                    border-top-color: #0d1117;
+                  "
+                ></span>
+                <span id="forgotFindText">Tìm tài khoản →</span>
+              </span>
+            </button>
+          </div>
+
+          <div id="forgotStep2" style="display: none">
+            <div class="found-user-box" id="foundUserBox"></div>
+            <div class="field" style="margin-top: 14px">
+              <label>Mật khẩu mới</label>
+              <div class="pw-wrap">
+                <input
+                  type="password"
+                  id="newPassword"
+                  placeholder="Tối thiểu 6 ký tự"
+                  autocomplete="new-password"
+                />
+                <button
+                  class="pw-toggle"
+                  id="newPwToggle"
+                  type="button"
+                  tabindex="-1"
+                >
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Xác nhận mật khẩu mới</label>
+              <div class="pw-wrap">
+                <input
+                  type="password"
+                  id="newConfirm"
+                  placeholder="Nhập lại mật khẩu"
+                  autocomplete="new-password"
+                />
+                <button
+                  class="pw-toggle"
+                  id="newConfirmToggle"
+                  type="button"
+                  tabindex="-1"
+                >
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+              </div>
+            </div>
+            <button
+              class="btn-submit"
+              id="resetPwBtn"
+              type="button"
+              style="background: var(--gold); color: #0d1117"
+            >
+              <span class="btn-inner">
+                <span
+                  class="spinner"
+                  id="resetSpinner"
+                  style="
+                    border-color: rgba(0, 0, 0, 0.2);
+                    border-top-color: #0d1117;
+                  "
+                ></span>
+                <span id="resetBtnText">Đặt lại mật khẩu →</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Success reset password -->
+        <div class="success-box" id="successResetView">
+          <div class="success-icon"><i class="fa-solid fa-key"></i></div>
+          <div class="success-msg" style="color: var(--gold)">
+            Đặt lại thành công!
+          </div>
+          <div class="success-sub">Đang chuyển về đăng nhập...</div>
+        </div>
+
+        <!-- Register form -->
+        <div id="registerView" style="display: none">
+          <div class="err-msg" id="regErrMsg">
+            <i class="fa-solid fa-triangle-exclamation"></i> Vui lòng kiểm tra lại thông tin
+          </div>
+
+          <div class="field">
+            <label>Họ và tên</label>
+            <input
+              type="text"
+              id="regName"
+              placeholder="Nguyễn Văn A..."
+              autocomplete="name"
+            />
+          </div>
+
+          <div class="field">
+            <label>Tên đăng nhập</label>
+            <input
+              type="text"
+              id="regUsername"
+              placeholder="Nhập tên đăng nhập..."
+              autocomplete="username"
+            />
+          </div>
+
+          <div class="field">
+            <label>Mật khẩu</label>
+            <div class="pw-wrap">
+              <input
+                type="password"
+                id="regPassword"
+                placeholder="Tối thiểu 6 ký tự"
+                autocomplete="new-password"
+              />
+              <button
+                class="pw-toggle"
+                id="regPwToggle"
+                type="button"
+                tabindex="-1"
+              >
+                <i class="fa-regular fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Xác nhận mật khẩu</label>
+            <div class="pw-wrap">
+              <input
+                type="password"
+                id="regConfirm"
+                placeholder="Nhập lại mật khẩu"
+                autocomplete="new-password"
+              />
+              <button
+                class="pw-toggle"
+                id="regConfirmToggle"
+                type="button"
+                tabindex="-1"
+              >
+                <i class="fa-regular fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <button
+            class="btn-submit"
+            id="registerBtn"
+            type="button"
+            style="background: var(--green)"
+          >
+            <span class="btn-inner">
+              <span class="spinner" id="regSpinner"></span>
+              <span id="regBtnText">Tạo tài khoản →</span>
+            </span>
+          </button>
+
+          <div class="or-row">hoặc</div>
+
+          <div class="new-user">
+            Đã có tài khoản? <a href="#" id="backToLoginLink">Đăng nhập</a>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-chip">
+            <div class="stat-num">3.2k</div>
+            <div class="stat-lbl">Từ vựng</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-num">48</div>
+            <div class="stat-lbl">Phiên học</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-num">92%</div>
+            <div class="stat-lbl">Tỉ lệ đúng</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="assets/js/login.js"></script>
+  </body>
+</html>

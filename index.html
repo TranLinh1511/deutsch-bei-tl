@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>🇩🇪 bei TL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="icon" type="image/png" href="assets/images/favicon.png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;600;700;800&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <script src="assets/js/tailwind-config.js"></script>
+</head>
+
+<body>
+  <!-- BREAK OVERLAY (nghỉ giải lao) — phỏng theo Cat Gatekeeper gốc:
+       nền overlay TRONG SUỐT, trang vẫn hiển thị bên dưới; chỉ video mèo
+       (cao bằng chiều cao màn hình, trượt vào từ bên phải) + đồng hồ đếm
+       ngược là các phần tử "đặc" nổi lên trên. -->
+  <div id="breakOverlay">
+    <video id="breakVideo" muted playsinline></video>
+    <div id="breakCountdown" style="
+          position: absolute;
+          top: 38%;
+          left: 33%;
+          transform: translate(-50%, -50%);
+          background: rgba(60, 60, 60, 0.35);
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+          color: #fff;
+          font-family: 'DM Mono', monospace;
+          font-weight: 700;
+          font-size: clamp(28px, 7vw, 78px);
+          padding: 18px 36px;
+          border-radius: 20px;
+          line-height: 1;
+          z-index: 2;
+        ">
+      5:00
+    </div>
+
+  </div>
+  <div id="mobileOverlay"></div>
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="header-left">
+      <button id="mobileMenuBtn"><i class="fa-solid fa-bars"></i></button>
+      <span class="text-[22px] leading-none">🇩🇪</span>
+      <span class="font-syne font-extrabold text-[1.05rem] tracking-tight cursor-pointer select-none">bei <span
+          class="text-[#58a6ff]">TL</span></span>
+    </div>
+    <div class="header-right">
+      <button id="folderMgrBtn"
+        class="hbtn header-session-pill flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm cursor-pointer"
+        title="Quản lý thư mục / Chọn phiên" style="font-family: inherit">
+        <span style="
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              line-height: 1;
+            "><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg></span>
+        <span id="currentSessionLabel" style="
+              font-size: 0.78rem;
+              color: var(--tx3);
+              max-width: 100px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              font-weight: 400;
+            ">—</span>
+      </button>
+      <button class="hbtn" id="headerSelectBtn" title="Chọn từ"><i class="fa-solid fa-square-check"></i></button>
+      <button class="hbtn" id="headerSearchAllBtn" title="Tìm trong tất cả phiên" style="font-size:1.05rem"><i class="fa-solid fa-magnifying-glass"></i></button>
+      <button class="hbtn" id="settingsBtn" title="Cài đặt"><i class="fa-solid fa-gear"></i></button>
+    </div>
+  </div>
+
+  <!-- MOBILE STATS BAR -->
+  <div id="mobileStatsBar">
+    <!-- Row 1: stats + selects + reset -->
+    <div class="flex items-center gap-1.5 w-full">
+      <div class="font-mono text-[0.76rem] text-[#8b949e] flex-shrink-0">
+        <i class="fa-solid fa-check"></i>
+        <span class="text-[#3fb950] font-bold" id="mStatCorrect">0</span>/<span id="mStatTotal">0</span> &nbsp;<span
+          class="text-[#6e7681]" id="mStatPct">0%</span>
+      </div>
+      <div class="flex items-center gap-1.5 ml-auto flex-shrink-0">
+        <select id="mobExerciseTypeSelect">
+          <option value="fullWord">Nguyên từ</option>
+          <option value="fullMeaning">Nghĩa</option>
+          <option value="mixedRandom">Hỗn hợp</option>
+          <option value="fullSentence">Nhập câu</option>
+        </select>
+        <select id="mobModeSelect">
+          <option value="write">Viết</option>
+          <option value="choose">Chọn</option>
+          <option value="listen">Nghe</option>
+        </select>
+        <button id="mobResetBtn">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+      </div>
+    </div>
+    <!-- Row 2: Batch navigation (mobile floating, hidden by default) -->
+    <div id="mobBatchInfo" style="
+          display: none;
+          position: fixed;
+          bottom: calc(18px + var(--safe-bottom));
+          right: 18px;
+          z-index: 400;
+          background: linear-gradient(
+            135deg,
+            rgba(88, 166, 255, 0.15) 0%,
+            rgba(63, 185, 80, 0.1) 100%
+          );
+          border: 1px solid rgba(88, 166, 255, 0.3);
+          border-radius: 12px;
+          padding: 5px 8px;
+          align-items: center;
+          gap: 4px;
+          box-shadow:
+            0 4px 20px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        ">
+      <button id="mobPrevBatchBtn" class="bbtn" disabled title="Batch trước" style="
+            min-height: 28px;
+            padding: 2px 9px;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(88, 166, 255, 0.22);
+            color: #58a6ff;
+            border-radius: 7px;
+          ">
+        <i class="fa-solid fa-backward"></i>
+      </button>
+      <span id="mobBatchLabel" style="
+            font-family: &quot;DM Mono&quot;, monospace;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #58a6ff;
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid rgba(88, 166, 255, 0.22);
+            border-radius: 6px;
+            padding: 2px 10px;
+          ">1/1</span>
+      <button id="mobNextBatchBtn" class="bbtn" disabled title="Batch tiếp" style="
+            min-height: 28px;
+            padding: 2px 9px;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(88, 166, 255, 0.22);
+            color: #58a6ff;
+            border-radius: 7px;
+          ">
+        <i class="fa-solid fa-forward"></i>
+      </button>
+      <button id="mobSelectInBatchBtn" class="bbtn" title="Chọn từ trong batch" style="
+            min-height: 28px;
+            padding: 2px 9px;
+            font-size: 0.8rem;
+            margin-left: 2px;
+            background: rgba(63, 185, 80, 0.1);
+            border-color: rgba(63, 185, 80, 0.3);
+            color: #3fb950;
+            border-radius: 7px;
+          ">
+        <i class="fa-solid fa-bullseye"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- LAYOUT -->
+  <div id="layout">
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div class="px-2.5 pt-2 pb-1.5 border-b border-[#21262d] flex-shrink-0 flex flex-col gap-1">
+        <div class="text-[0.7rem] font-bold uppercase tracking-widest text-[#6e7681]">
+          <i class="fa-solid fa-book"></i> Từ vựng
+        </div>
+        <div class="flex gap-1 items-center" style="position:relative">
+          <input
+            class="flex-1 bg-[#0d1117] border border-[#30363d] text-[#e6edf3] font-[inherit] text-[0.84rem] px-2.5 py-1.5 rounded-md outline-none focus:border-[#58a6ff] min-w-0 placeholder:text-[#6e7681]"
+            id="sidebarSearch" placeholder="Tìm từ..." type="text" autocomplete="off" />
+          <button id="sidebarSearchClear" title="Xóa"
+            style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--tx3);font-size:1rem;cursor:pointer;padding:2px 4px;line-height:1">×</button>
+        </div>
+      </div>
+      <div class="px-2.5 py-2 flex gap-1.5 flex-shrink-0 border-b border-[#21262d] items-center sidebar-action-row">
+        <button class="sbtn primary sidebar-add-btn" id="addWordSidebarBtn">
+          <i class="fa-solid fa-plus"></i> Thêm
+        </button>
+        <select class="sidebar-filter-select sidebar-filter-grow" id="sidebarTypeFilter">
+          <option value="all">Tất cả loại từ</option>
+          <option value="n">Danh từ</option>
+          <option value="v">Động từ</option>
+          <option value="other">Khác</option>
+        </select>
+        <select class="sidebar-filter-select sidebar-filter-grow" id="sidebarFilterSelect">
+          <option value="all">Tất cả</option>
+          <option value="active">Đang học</option>
+          <option value="mastered">Thuộc</option>
+          <option value="flagged">Chú ý</option>
+        </select>
+        <div style="position:relative;flex-shrink:0">
+          <button class="sbtn sidebar-bulk-btn" id="bulkModeBtn" title="Chọn loạt">
+            <i class="fa-regular fa-square"></i>
+          </button>
+          <!-- Dropdown menu -->
+          <div id="bulkDropdown" style="
+            display:none;
+            position:absolute;
+            top:calc(100% + 6px);
+            right:0;
+            z-index:500;
+            background:var(--bg2);
+            border:1px solid var(--border);
+            border-radius:10px;
+            box-shadow:0 8px 24px rgba(0,0,0,0.4),0 2px 8px rgba(0,0,0,0.3);
+            min-width:170px;
+            overflow:hidden;
+            animation:scaleIn 0.18s cubic-bezier(0.34,1.56,0.64,1);
+          ">
+            <div
+              style="padding:6px 10px 4px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">
+              Chọn hàng loạt</div>
+            <button class="bulk-dropdown-item" data-action="master"><i class="fa-solid fa-circle-check"></i> Đánh dấu thuộc</button>
+            <button class="bulk-dropdown-item" data-action="unmaster"><i class="fa-solid fa-rotate-left"></i> Bỏ thuộc lòng</button>
+            <div style="height:1px;background:var(--border2);margin:3px 0"></div>
+            <button class="bulk-dropdown-item" data-action="flag"><i class="fa-solid fa-star"></i> Đánh dấu chú ý</button>
+            <button class="bulk-dropdown-item" data-action="unflag"><i class="fa-regular fa-star"></i> Bỏ chú ý</button>
+            <div style="height:1px;background:var(--border2);margin:3px 0"></div>
+            <button class="bulk-dropdown-item danger" data-action="delete"><i class="fa-solid fa-trash"></i> Xóa từ</button>
+          </div>
+        </div>
+      </div>
+      <!-- Selection bar (shown after choosing an action) -->
+      <div
+        class="hidden gap-1.5 px-2.5 py-1.5 border-b border-[#21262d] flex-shrink-0 items-center bg-[rgba(88,166,255,.04)]"
+        id="sidebarBulkBar" style="min-height:38px">
+        <button class="bulk-btn" id="bulkSelectAllBtn" title="Chọn tất cả" style="flex-shrink:0"><i class="fa-regular fa-square"></i></button>
+        <span class="text-[0.72rem] text-[#6e7681] font-mono" id="bulkCountLabel" style="flex-shrink:0">0 từ</span>
+        <div style="flex:1"></div>
+        <span id="bulkActionLabel" style="font-size:0.72rem;color:var(--tx2);flex-shrink:0;font-weight:600"></span>
+        <button class="bulk-btn success" id="bulkConfirmBtn"
+          style="flex-shrink:0;padding:3px 10px;font-size:0.78rem">Xác nhận</button>
+        <!-- Hidden action buttons (kept for JS compatibility) -->
+        <button class="bulk-btn success" id="bulkMasterBtn" style="display:none"><i class="fa-solid fa-circle-check"></i></button>
+        <button class="bulk-btn" id="bulkUnmasterBtn" style="display:none"><i class="fa-solid fa-rotate-left"></i></button>
+        <button class="bulk-btn flag-btn" id="bulkFlagBtn" style="display:none"><i class="fa-solid fa-star"></i></button>
+        <button class="bulk-btn flag-btn" id="bulkUnflagBtn" style="display:none"><i class="fa-regular fa-star"></i></button>
+        <button class="bulk-btn danger" id="bulkDeleteBtn" style="display:none"><i class="fa-solid fa-trash"></i></button>
+        <button class="bulk-btn" id="bulkCancelBtn" style="flex-shrink:0"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="wordList"></div>
+      <div id="sidebarPager"
+        class="flex gap-1 items-center justify-center px-2 py-1 flex-shrink-0 border-t border-[#21262d]"></div>
+      <div
+        class="px-3 py-1.5 border-t border-[#21262d] text-[0.72rem] text-[#6e7681] flex justify-between items-center flex-shrink-0">
+        <span id="sidebarCount" class="count-badge px-3 py-0.5 rounded-full font-mono">0 từ</span>
+        <span>Học:
+          <strong id="practiceCountNum" class="text-[#58a6ff]">0</strong></span>
+      </div>
+      <button id="sidebarToggle">‹</button>
+    </div>
+
+    <!-- MAIN -->
+    <div id="main">
+      <div id="modebar">
+        <div class="modebar-group">
+          <select class="mselect" id="sourceSelect" style="display:none">
+            <option value="session">Phiên hiện tại</option>
+            <option value="merged">Gộp phiên</option>
+          </select>
+          <select class="mselect" id="wordLimitSelect">
+            <option value="0">Tất cả</option>
+            <option value="3">3 từ</option>
+            <option value="5">5 từ</option>
+            <option value="10">10 từ</option>
+            <option value="15">15 từ</option>
+            <option value="20">20 từ</option>
+            <option value="30">30 từ</option>
+            <option value="50">50 từ</option>
+          </select>
+        </div>
+        <div class="modebar-sep"></div>
+        <div class="modebar-group">
+          <select class="mselect" id="exerciseTypeSelect">
+            <option value="fullWord">Nguyên từ</option>
+            <option value="fullMeaning">Nghĩa</option>
+            <option value="mixedRandom">Hỗn hợp</option>
+            <option value="fullSentence">Nhập câu</option>
+          </select>
+          <!-- Mode dropdown: replaces segmented control -->
+          <select class="mselect" id="modebarModeSelect">
+            <option value="write">Viết</option>
+            <option value="choose">Chọn</option>
+            <option value="listen">Nghe</option>
+          </select>
+        </div>
+        <div class="modebar-spacer"></div>
+        <div class="modebar-right">
+          <div class="stats-chip font-mono text-[0.78rem] px-2 py-1 rounded-md text-[#8b949e] whitespace-nowrap">
+            <i class="fa-solid fa-check"></i>
+            <span class="text-[#3fb950] font-bold" id="statCorrect">0</span>/<span id="statTotal">0</span> (<span
+              id="statPct">0</span>%)
+          </div>
+          <button class="mbtn" id="resetStatsBtn"><i class="fa-solid fa-arrows-rotate"></i> Reset</button>
+        </div>
+      </div>
+
+      <div id="batchbar" class="hidden">
+        <span class="text-[0.74rem] text-[#6e7681] whitespace-nowrap">Batch:</span>
+        <button class="bbtn" id="prevBatchBtn" disabled><i class="fa-solid fa-backward"></i></button>
+        <span class="font-mono text-[0.72rem] px-2 py-0.5 rounded text-[#6e7681]" id="batchLabel">1/1</span>
+        <button class="bbtn" id="nextBatchBtn" disabled><i class="fa-solid fa-forward"></i></button>
+        <button class="bbtn ml-1" id="selectInBatchBtn"><i class="fa-solid fa-bullseye"></i> Chọn</button>
+      </div>
+
+      <div id="exerciseArea">
+        <div class="w-full max-w-[680px] flex flex-col gap-[22px]" id="exCard">
+          <div class="text-center text-[#6e7681] py-9 px-4">
+            <div class="text-[2.6rem] mb-2"><i class="fa-regular fa-folder-open"></i></div>
+            <p class="text-[0.92rem] leading-relaxed">
+              Chưa có từ vựng.<br />Thêm từ để bắt đầu luyện tập!
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALS (same as original) -->
+  <div class="modal-overlay" id="addWordModal">
+    <div class="modal-box">
+      <div class="text-[1.05rem] font-extrabold mb-4 flex justify-between items-center">
+        <i class="fa-solid fa-plus"></i> Thêm từ mới<button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeAddModal">
+          &times;
+        </button>
+      </div>
+      <div class="flex gap-0 mb-3 border-b border-[#30363d]">
+        <button class="tab-item active" id="manualTabBtn"><i class="fa-solid fa-pen-to-square"></i> Thủ công</button>
+        <button class="tab-item" id="batchTabBtn"><i class="fa-solid fa-box"></i> Hàng loạt</button>
+        <button class="tab-item" id="importTabBtn"><i class="fa-solid fa-file-import"></i> Nhập file</button>
+      </div>
+      <div id="manualForm">
+        <input class="modal-input" id="modalGerman" placeholder="Từ vựng (VD: die Schule / die Schulen)" type="text"
+          autocomplete="off" />
+        <input class="modal-input" id="modalWordType" placeholder="Loại từ (VD: n, v, adj, adv...)" type="text" />
+        <input class="modal-input" id="modalMeaning" placeholder="Nghĩa tiếng Việt" type="text" />
+        <input class="modal-input" id="modalExample" placeholder="Ví dụ (VD: Lili geht in die Schule.)" type="text" />
+        <div class="flex justify-end gap-2 mt-2">
+          <button class="modal-btn" id="cancelAddModal">Hủy</button>
+          <button class="modal-btn confirm" id="confirmAddModal">Thêm</button>
+        </div>
+      </div>
+      <div id="batchForm" style="display: none">
+        <textarea class="modal-textarea" id="batchTextArea"
+          placeholder="Nhập: từ [tab] loại [tab] nghĩa [tab] ví dụ&#10;VD:&#10;die Schule / die Schulen	n	trường học	Lili geht in die Schule.&#10;laufen	v	chạy	Er läuft schnell."></textarea>
+        <div class="flex justify-end gap-2 mt-2">
+          <button class="modal-btn" id="cancelBatchModal">Hủy</button>
+          <button class="modal-btn confirm" id="confirmBatchModal">
+            <i class="fa-solid fa-rocket"></i> Nhập
+          </button>
+        </div>
+      </div>
+      <div id="importFormInModal" style="display: none">
+        <p class="text-[0.78rem] text-[#6e7681] mb-2">
+          Nhập vào phiên hiện tại. Hỗ trợ JSON hoặc Excel (.xlsx) với các cột:
+          <strong>Từ tiếng Đức</strong> | <strong>Loại từ</strong> |
+          <strong>Nghĩa</strong> | <strong>Ví dụ</strong>
+        </p>
+        <label id="importDropZoneModal"
+          class="flex items-center justify-center gap-2 p-5 border-2 border-dashed border-[#30363d] rounded-xl cursor-pointer text-[0.86rem] text-[#8b949e] flex-col hover:border-[#58a6ff] transition-colors">
+          <span class="text-[1.6rem]"><i class="fa-solid fa-folder"></i></span>
+          <span>Chọn file JSON hoặc Excel<br /><span class="text-[0.74rem] text-[#6e7681]">Hỗ trợ .json / .xlsx /
+              .xls</span></span>
+          <input type="file" id="importFileInputModal" accept=".json,.xlsx,.xls" class="hidden" />
+        </label>
+        <p class="text-[0.74rem] text-[#6e7681] mt-1 text-center" id="importStatusModal"></p>
+        <p class="text-[0.72rem] text-[#6e7681] mt-3 pt-2 border-t border-[#21262d]">
+          <i class="fa-solid fa-lightbulb"></i> Để xuất dữ liệu, dùng menu <strong>⋯</strong> trong từng phiên hoặc thư mục.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="editWordModal">
+    <div class="modal-box">
+      <div class="text-[1.05rem] font-extrabold mb-4 flex justify-between items-center">
+        Sửa từ<button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeEditModal">
+          &times;
+        </button>
+      </div>
+      <input class="modal-input" id="editGerman" placeholder="Từ vựng" type="text" />
+      <input class="modal-input" id="editWordType" placeholder="Loại từ (n, v, adj...)" type="text" />
+      <input class="modal-input" id="editMeaning" placeholder="Nghĩa" type="text" />
+      <textarea class="modal-textarea" id="editExample" placeholder="Ví dụ"
+        style="font-family:inherit;font-size:0.9rem;min-height:80px"></textarea>
+      <div class="flex justify-end gap-2 mt-2">
+        <button class="modal-btn" id="cancelEditModal">Hủy</button>
+        <button class="modal-btn confirm" id="saveEditModal"><i class="fa-solid fa-floppy-disk"></i> Lưu</button>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- GLOBAL SEARCH MODAL -->
+  <div class="modal-overlay" id="globalSearchModal">
+    <div class="modal-box" style="max-width:560px">
+      <div class="text-[1.05rem] font-extrabold mb-3 flex justify-between items-center">
+        <i class="fa-solid fa-magnifying-glass"></i> Tìm trong tất cả phiên
+        <button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeGlobalSearchModal">&times;</button>
+      </div>
+      <div style="position:relative;margin-bottom:10px">
+        <input class="modal-input !mb-0" id="globalSearchInput" placeholder="Nhập từ cần tìm rồi nhấn Enter..."
+          type="text" autocomplete="off" style="padding-right:64px" />
+        <button id="globalSearchClearBtn" title="Xóa"
+          style="display:none;position:absolute;right:36px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--tx3);font-size:1.1rem;cursor:pointer;padding:0 4px;line-height:1">×</button>
+        <button id="globalSearchBtn" title="Tìm kiếm (Enter)"
+          style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--tx3);font-size:1rem;cursor:pointer;padding:4px 7px;line-height:1;border-radius:5px"><i class="fa-solid fa-magnifying-glass"></i></button>
+      </div>
+      <!-- search history -->
+      <div id="globalSearchHistory" style="display:none;margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span
+            style="font-size:0.72rem;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Lịch
+            sử tìm kiếm</span>
+          <button id="clearAllSearchHistory"
+            style="background:none;border:none;font-size:0.72rem;color:var(--tx3);cursor:pointer;padding:2px 4px">Xóa
+            tất cả</button>
+        </div>
+        <div id="globalSearchHistoryList" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      </div>
+      <!-- results -->
+      <div id="globalSearchResults" style="max-height:360px;overflow-y:auto"></div>
+      <div id="globalSearchCount" style="font-size:0.73rem;color:var(--tx3);margin-top:6px;text-align:right"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="selectWordsModal">
+    <div class="modal-box" style="max-width: 560px">
+      <div class="text-[1.05rem] font-extrabold mb-4 flex justify-between items-center">
+        <i class="fa-solid fa-square-check"></i> Chọn từ luyện tập<button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeSelectModal">
+          &times;
+        </button>
+      </div>
+      <div class="wg-actions-row flex gap-1 items-center mb-2">
+        <button class="wg-abtn" id="selAllBtn"><i class="fa-solid fa-circle-check"></i> Chọn tất cả</button>
+        <button class="wg-abtn" id="deselAllBtn"><i class="fa-solid fa-circle-xmark"></i> Bỏ tất cả</button>
+      </div>
+      <div class="word-grid" id="wordGrid"></div>
+      <div class="text-[0.8rem] text-[#6e7681] font-mono text-right mt-2" id="selCount">0/0</div>
+      <div class="flex justify-end gap-2 mt-2">
+        <button class="modal-btn" id="cancelSelectModal">Hủy</button>
+        <button class="modal-btn confirm" id="applySelectModal">
+          <i class="fa-solid fa-circle-check"></i> Áp dụng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-box" style="max-width: 500px">
+      <div class="text-[1.05rem] font-extrabold mb-4 flex justify-between items-center">
+        Cài đặt<button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeSettingsModal">
+          &times;
+        </button>
+      </div>
+      <div class="setting-section">Tài khoản</div>
+      <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[52px]"
+        style="padding-left:12px">
+        <div class="flex items-center gap-2.5">
+          <div id="settingsUserAvatar" style="
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #58a6ff, #3fb950);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1rem;
+                font-weight: 800;
+                color: #fff;
+                flex-shrink: 0;
+              "></div>
+          <div>
+            <div id="settingsUsername" class="text-[0.88rem] font-bold" style="color: var(--tx)">
+              —
+            </div>
+            <div class="text-[0.72rem] font-mono" style="color: var(--tx3)">
+              Đã đăng nhập
+            </div>
+          </div>
+        </div>
+        <button id="logoutBtn" class="modal-btn danger text-[0.78rem] px-3 py-1.5 min-h-[34px]"
+          style="display: flex; align-items: center; gap: 5px">
+          <span></span><span>Đăng xuất</span>
+        </button>
+      </div>
+      <div class="setting-section" style="display:none">Nguồn & Giới hạn</div>
+      <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]"
+        style="display:none;padding-left:12px">
+        <span class="setting-label">Nguồn từ vựng</span>
+        <select class="mselect text-[0.8rem] py-1 px-2 min-h-[32px]" id="sourceSelectModal">
+          <option value="session">Phiên hiện tại</option>
+          <option value="merged">Gộp phiên</option>
+        </select>
+      </div>
+      <!-- Desktop-hidden: these controls are visible in the modebar on desktop -->
+      <div class="setting-section mt-1" style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+          " id="optionsSectionToggle">
+        <span>Tùy chọn</span>
+        <span id="optionsToggleIcon" style="font-size: 0.8rem; color: var(--tx3)">▶</span>
+      </div>
+      <div id="optionsPanel" style="display: none; padding-left: 12px">
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Chế độ sáng/tối</span>
+          <button class="toggle-btn" id="tgDark">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Random từ vựng</span>
+          <button class="toggle-btn" id="tgRandom">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Tự động chuyển câu</span>
+          <button class="toggle-btn" id="tgAutoAdv">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Cho phép bỏ qua câu sai</span>
+          <button class="toggle-btn" id="tgAllowSkip">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Bật âm thanh</span>
+          <button class="toggle-btn" id="tgSpeak">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Chỉ học từ chưa thuộc</span>
+          <button class="toggle-btn" id="tgOnlyUnmastered">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label"
+            title="Tắt: động từ chỉ cần nhập nguyên mẫu, danh từ chỉ cần nhập số ít (trước /)">Kiểm tra 100% từ
+            vựng</span>
+          <button class="toggle-btn" id="tgStrictVocab">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Chế độ học bài</span>
+          <button class="toggle-btn" id="tgStudy">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Break time (nghỉ giải lao) collapsible section -->
+      <div class="setting-section mt-1" style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+          " id="breakSectionToggle">
+        <span>Nghỉ giải lao</span>
+        <span id="breakToggleIcon" style="font-size: 0.8rem; color: var(--tx3)">▶</span>
+      </div>
+      <div id="breakPanel" style="display: none; padding-left: 12px">
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px]">
+          <span class="setting-label">Bật nhắc nghỉ</span>
+          <button class="toggle-btn" id="tgBreakEnabled">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px] gap-2">
+          <span class="setting-label">Làm việc (phút)</span>
+          <input type="number" min="1" max="180" step="1" id="breakWorkMinutes" value="25"
+            class="mselect text-[0.8rem] py-1 px-2 min-h-[32px]" style="width: 72px; text-align: center" />
+        </div>
+        <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px] gap-2">
+          <span class="setting-label">Nghỉ (phút)</span>
+          <input type="number" min="1" max="60" step="1" id="breakRestMinutes" value="5"
+            class="mselect text-[0.8rem] py-1 px-2 min-h-[32px]" style="width: 72px; text-align: center" />
+        </div>
+        <div style="font-size: 0.7rem; color: var(--tx3); padding: 6px 0 4px; line-height: 1.4">
+          Hết giờ làm việc, video mèo sẽ hiện đè lên trang (chạy hết video Mèo 1 rồi
+          chuyển sang Mèo 2 và lặp lại Mèo 2) trong suốt thời gian nghỉ quy định.
+          Video sẽ tự biến mất khi hết giờ nghỉ.
+        </div>
+      </div>
+
+      <!-- AI Prompt collapsible section -->
+      <div class="setting-section mt-1" style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+          " id="aiPromptSectionToggle">
+        <span>Xuất Prompt AI</span>
+        <span id="aiPromptToggleIcon" style="font-size: 0.8rem; color: var(--tx3)">▶</span>
+      </div>
+      <div id="aiPromptPanel" style="display: none; padding-bottom: 4px; padding-left: 12px">
+        <!-- Trình độ -->
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2"
+          style="margin-top: 8px">
+          <span class="setting-label" style="flex: 1; font-size: 0.8rem">Trình độ bài tập</span>
+          <select id="promptLevelSelect" class="mselect" style="
+                font-size: 0.78rem;
+                padding: 4px 8px;
+                min-height: 30px;
+                min-width: 90px;
+              ">
+            <option value="A1.1">A1.1</option>
+            <option value="A1.2">A1.2</option>
+            <option value="A2.1">A2.1</option>
+            <option value="A2.2" selected>A2.2</option>
+            <option value="B1.1">B1.1</option>
+            <option value="B1.2">B1.2</option>
+            <option value="B2.1">B2.1</option>
+            <option value="B2.2">B2.2</option>
+            <option value="custom">Khác</option>
+          </select>
+        </div>
+
+        <!-- ── Section: Bài tập viết ── -->
+        <div style="
+              font-size: 0.68rem;
+              font-weight: 700;
+              color: #58a6ff;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              margin: 10px 0 4px;
+              padding-top: 6px;
+              border-top: 1px solid var(--border2);
+            ">
+          Bài tập viết
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <span class="setting-label" style="flex: 1">Bài tập từ vựng</span>
+          <button id="exportPromptVocabAnswerToggle" data-active="false"
+            style="background:transparent;border:1px solid var(--border2);color:var(--tx3);font-size:0.7rem;padding:2px 7px;min-height:24px;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s"
+            title="Bật/tắt kèm đáp án trong prompt">
+            Đáp án
+          </button>
+          <button class="modal-btn text-[0.75rem] px-2 py-1 min-h-[30px]" id="exportPromptVocabBtn">
+            Copy
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <span class="setting-label" style="flex: 1">Bài tập ngữ pháp</span>
+          <button id="exportPromptGrammarAnswerToggle" data-active="false"
+            style="background:transparent;border:1px solid var(--border2);color:var(--tx3);font-size:0.7rem;padding:2px 7px;min-height:24px;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s"
+            title="Bật/tắt kèm đáp án trong prompt">
+            Đáp án
+          </button>
+          <button class="modal-btn text-[0.75rem] px-2 py-1 min-h-[30px]" id="exportPromptGrammarBtn">
+            Copy
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <div style="flex: 1">
+            <span class="setting-label">Bài tập dịch</span>
+            <div style="font-size: 0.7rem; color: var(--tx3); margin-top: 1px">
+              5 bài × 10 câu, bài 5 là đoạn văn cần dịch
+            </div>
+          </div>
+          <button id="exportPromptTranslationAnswerToggle" data-active="false"
+            style="background:transparent;border:1px solid var(--border2);color:var(--tx3);font-size:0.7rem;padding:2px 7px;min-height:24px;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s"
+            title="Bật/tắt kèm đáp án trong prompt">
+            Đáp án
+          </button>
+          <button class="modal-btn text-[0.75rem] px-2 py-1 min-h-[30px]" id="exportPromptTranslationBtn">
+            Copy
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <span class="setting-label" style="flex: 1">Trích từ hình ảnh</span>
+          <button id="exportPromptImageAnswerToggle" data-active="false"
+            style="background:transparent;border:1px solid var(--border2);color:var(--tx3);font-size:0.7rem;padding:2px 7px;min-height:24px;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s"
+            title="Bật/tắt kèm đáp án trong prompt">
+            Đáp án
+          </button>
+          <button class="modal-btn text-[0.75rem] px-2 py-1 min-h-[30px]" id="exportPromptImageBtn">
+            Copy
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <div style="flex: 1">
+            <span class="setting-label">Đề thi thử</span>
+            <div style="font-size: 0.7rem; color: var(--tx3); margin-top: 1px">
+              Sát format Goethe/telc, không giới hạn từ vựng
+            </div>
+          </div>
+          <button id="exportPromptExamAnswerToggle" data-active="false"
+            style="background:transparent;border:1px solid var(--border2);color:var(--tx3);font-size:0.7rem;padding:2px 7px;min-height:24px;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s"
+            title="Bật/tắt kèm đáp án trong prompt">
+            Đáp án
+          </button>
+          <button class="modal-btn text-[0.75rem] px-2 py-1 min-h-[30px]" id="exportPromptExamBtn">
+            Copy
+          </button>
+        </div>
+
+        <!-- ── Section: Luyện nói ── -->
+        <div style="
+              font-size: 0.68rem;
+              font-weight: 700;
+              color: #58a6ff;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              margin: 10px 0 4px;
+              padding-top: 6px;
+              border-top: 1px solid var(--border2);
+            ">
+          Luyện nói (Sprechen)
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <div style="flex: 1">
+            <span class="setting-label">Teil 2 · Hỏi & Trả lời</span>
+            <div style="font-size: 0.7rem; color: var(--tx3); margin-top: 1px">
+              Thẻ từ khóa theo chủ đề, hỏi đáp trong nhóm
+            </div>
+          </div>
+          <button class="modal-btn text-[0.75rem] px-2 py-1 min-h-[30px]" id="exportPromptSprechenT2Btn">
+            Copy
+          </button>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <div style="flex: 1">
+            <span class="setting-label">Teil 3 · Nhờ & Phản hồi</span>
+            <div style="font-size: 0.7rem; color: var(--tx3); margin-top: 1px">
+              Thẻ hình ảnh, đưa ra yêu cầu và phản hồi
+            </div>
+          </div>
+          <button class="modal-btn text-[0.75rem] px-2 py-1 min-h-[30px]" id="exportPromptSprechenT3Btn">
+            Copy
+          </button>
+        </div>
+
+        <!-- ── Section: HTML ── -->
+        <!-- ── Status + Mô tả ── -->
+        <div id="exportPromptStatus" style="
+              font-size: 0.75rem;
+              color: #3fb950;
+              margin-top: 8px;
+              text-align: center;
+              min-height: 18px;
+            "></div>
+      </div>
+
+      <div class="flex justify-between items-center py-3 border-b border-[#21262d] min-h-[46px] gap-3 mt-1"
+        style="padding-left:12px">
+        <span class="setting-label" style="font-size:0.8rem;">Bộ gõ Việt–Đức
+          <span style="color:var(--tx3);font-size:0.7rem;font-weight:400;font-family:'DM Mono',monospace;">cay.exe ·
+            v1.0.0</span>
+        </span>
+        <a href="https://github.com/TranLinh1511/cay/releases/download/v1.0.0/cay.exe" download="cay.exe"
+          style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#238636,#2ea043);color:#fff;font-size:0.78rem;font-weight:700;padding:7px 14px;border-radius:7px;text-decoration:none;white-space:nowrap;flex-shrink:0;border:none;cursor:pointer;transition:opacity .15s;"
+          onmouseover="this.style.opacity='.82'" onmouseout="this.style.opacity='1'">
+          Tải .exe
+        </a>
+      </div>
+
+      <div style="
+            margin-top: 14px;
+            border-top: 1px solid var(--border);
+            padding-top: 14px;
+            display: flex;
+            justify-content: flex-end;
+          ">
+        <button class="modal-btn confirm" id="closeSettingsDone">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOLDER MANAGEMENT MODAL -->
+  <div class="modal-overlay" id="folderModal">
+    <div class="modal-box"
+      style="max-width: 460px; overflow: visible; display:flex; flex-direction:column; max-height:90vh">
+      <div class="text-[1.05rem] font-extrabold mb-4 flex justify-between items-center" style="flex-shrink:0">
+        <i class="fa-solid fa-folder"></i> Quản lý thư mục
+        <button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeFolderModal">
+          &times;
+        </button>
+      </div>
+
+      <!-- Create folder -->
+      <div style="
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-shrink:0;
+          ">
+        <input id="newFolderName" type="text" placeholder="Tên thư mục mới…" style="
+              flex: 1;
+              padding: 7px 10px;
+              border-radius: 8px;
+              border: 1px solid var(--border);
+              background: var(--bg2);
+              color: var(--tx);
+              font-size: 0.83rem;
+              outline: none;
+            " />
+        <button class="modal-btn confirm" id="createFolderBtn" style="white-space: nowrap">
+          <i class="fa-solid fa-plus"></i> Tạo
+        </button>
+      </div>
+
+      <!-- Folder list (sessions selectable inline) -->
+      <div id="folderList"
+        style="display: flex; flex-direction: column; gap: 8px; overflow-y:auto; overflow-x:visible; flex:1; min-height:0">
+      </div>
+
+      <!-- Session management actions -->
+      <div style="
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            flex-shrink:0;
+          ">
+        <button class="modal-btn text-[0.78rem] px-2 py-1 min-h-[32px]" id="newSessionBtnModal">
+          <i class="fa-solid fa-plus"></i> Phiên mới
+        </button>
+        <button class="modal-btn text-[0.78rem] px-2 py-1 min-h-[32px]" id="importSessionsBtnModal">
+          <i class="fa-solid fa-file-import"></i> Nhập file
+        </button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:0.78rem;color:var(--tx2);white-space:nowrap">Sắp xếp</span>
+          <select id="folderSortSelect" class="mselect" style="font-size:0.75rem;padding:2px 6px;min-height:26px"
+            title="Sắp xếp thứ tự phiên bên trong mỗi thư mục">
+            <option value="default">Mặc định</option>
+            <option value="name">Theo tên (A-Z)</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <span style="font-size:0.78rem;color:var(--tx2);white-space:nowrap">Gộp phiên</span>
+          <button class="toggle-btn" id="tgFolderMergeMode"
+            title="Bật để chọn các phiên bên trong thư mục cho việc gộp phiên">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; display: flex; justify-content: flex-end; flex-shrink:0">
+        <button class="modal-btn confirm" id="closeFolderDone">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="addSessModal">
+    <div class="modal-box" style="max-width:400px">
+      <div class="text-[1.05rem] font-extrabold mb-3 flex justify-between items-center">
+        <span id="addSessModalTitle"><i class="fa-solid fa-plus"></i> Thêm phiên</span>
+        <button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeAddSessModal">&times;</button>
+      </div>
+      <div id="addSessModalList"
+        style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="modal-btn" id="cancelAddSessModal">Hủy</button>
+        <button class="modal-btn confirm" id="confirmAddSessModal"><i class="fa-solid fa-check"></i> Xác nhận</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal-overlay" id="exportSessionsModal">
+    <div class="modal-box" style="max-width: 460px"><button
+        class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+        id="closeExportSessionsModal">
+        &times;
+      </button>
+    </div>
+    <p class="text-[0.8rem] text-[#6e7681] mb-2">
+      Chọn các phiên muốn xuất. Dữ liệu bao gồm từ vựng và trạng thái đã
+      thuộc.
+    </p>
+    <div class="flex gap-1 mb-2">
+      <button class="wg-abtn" id="exportSelAllBtn"><i class="fa-solid fa-circle-check"></i> Chọn tất cả</button>
+      <button class="wg-abtn" id="exportDeselAllBtn"><i class="fa-solid fa-circle-xmark"></i> Bỏ tất cả</button>
+      <span class="ml-auto text-[0.76rem] text-[#6e7681] font-mono self-center" id="exportSelCount"></span>
+    </div>
+    <div class="sess-export-list" id="exportSessionsList"></div>
+    <div class="flex justify-end gap-2 mt-2">
+      <button class="modal-btn" id="cancelExportSessionsModal">Hủy</button>
+      <button class="modal-btn confirm" id="confirmExportSessionsBtn">
+        <i class="fa-solid fa-file-export"></i> Xuất JSON
+      </button>
+    </div>
+  </div>
+  </div>
+
+  <div class="modal-overlay" id="importSessionsModal">
+    <div class="modal-box" style="max-width: 460px">
+      <div class="text-[1.05rem] font-extrabold mb-4 flex justify-between items-center">
+        <i class="fa-solid fa-file-import"></i> Nhập phiên học<button
+          class="modal-close bg-none border-none text-[#6e7681] text-[1.3rem] cursor-pointer leading-none min-w-[34px] min-h-[34px] flex items-center justify-center hover:text-[#e6edf3]"
+          id="closeImportSessionsModal">
+          &times;
+        </button>
+      </div>
+      <p class="text-[0.8rem] text-[#6e7681] mb-2">
+        Nhập file JSON đã xuất từ ứng dụng. Hỗ trợ nhiều phiên cùng lúc. Phiên
+        trùng tên sẽ được nhập thêm từ vào.
+      </p>
+      <label id="importSessionsDropZone" class="sess-import-drop">
+        <span class="text-[1.6rem]"><i class="fa-solid fa-folder"></i></span>
+        <span class="text-[0.86rem]">Chọn hoặc kéo file JSON vào đây</span>
+        <span class="text-[0.74rem] text-[#6e7681]">Hỗ trợ file .json xuất từ ứng dụng</span>
+        <input type="file" id="importSessionsFileInput" accept=".json" class="hidden" />
+      </label>
+      <div class="text-[0.76rem] text-center text-[#6e7681] min-h-[18px] font-mono mb-1" id="importSessionsStatus">
+      </div>
+      <div id="importSessionsPreview" style="display: none">
+        <div class="text-[0.74rem] font-bold uppercase tracking-widest text-[#6e7681] mb-1">
+          Xem trước
+        </div>
+        <div class="sess-export-list max-h-[160px]" id="importSessionsPreviewList"></div>
+      </div>
+      <div class="flex justify-end gap-2 mt-2">
+        <button class="modal-btn" id="cancelImportSessionsModal">Hủy</button>
+        <button class="modal-btn confirm" id="confirmImportSessionsBtn" disabled>
+          <i class="fa-solid fa-file-import"></i> Nhập tất cả
+        </button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+
+</html>
