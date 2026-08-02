@@ -1,4 +1,4 @@
-    // ==================== FIREBASE ====================
+// ==================== FIREBASE ====================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
     import {
@@ -607,7 +607,7 @@
       try {
         // Shortest valid silent mp3 (base64)
         const silentSrc =
-          "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjM0LjEwNAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAABAAADQgD///////////////////////////////////////////////////////////////////////////8AAAA8TEFNRTMuMTAwBK8AAAAAAAAAABSAJAJAQgAAgAAAA0L////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN";
+          "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjM0LjEwNAAAAAAAAAAAAAAA//OUQDvDUxFShoWWbHougyHjr0tFz3E38fX8e0bnTUpya-P0mXW///////////////////////////////////////////////////////////////////////////8AAAA8TEFNRTMuMTAwBK8AAAAAAAAAABSAJAJAQgAAgAAAA0L////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXALFSI6ETIZJH2N5CFT2CFOKPFDVDTZUVR7Q3L26UG74SWYGMY6X7MA46Q//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN";
         _silentAudio = new Audio(silentSrc);
         _silentAudio.volume = 0;
         _silentAudio.play().catch(() => { });
@@ -5677,7 +5677,7 @@ ${levelBlock}
 YÊU CẦU CHUNG:
 • Tạo đúng 5 bài tập dịch, mỗi bài 10 câu (bài 5 là đoạn văn đặc biệt — xem dưới).
 • Mỗi bài dùng từ vựng trong danh sách bên dưới — phân bổ đều, ưu tiên từ chưa thuộc.
-• Phân bổ cấu trúc ngữ pháp đều qua 10 câu: ① chia động từ đúng ngôi/thì (Präsens, Perfekt, Präteritum) ② tính từ đúng Kasus + loại mạo từ ③ đại từ sở hữu đúng ngôi + Kasus ④ Präteritum sein/haben/Modalverben ⑤ Perfekt (haben/sein + Partizip II)
+• Phân bổ cấu trúc ngữ pháp đều qua 10 câu: ① chia động từ đúng ngôi/thì (Präsens, Perfekt, Präteritum) ② tính từ đúng Kasus + loại mạo từ ③ đại từ sở hữu đúng ngôi + Kasus ④ liên từ kết hợp (und/aber/oder/denn/sondern) + liên từ phụ thuộc (weil/dass/wenn/obwohl…) + um...zu (đúng vị trí động từ trong mệnh đề phụ) ⑤ Perfekt (haben/sein + Partizip II)
 • Bài 1–4: mỗi câu là 1 câu tiếng Việt → người học dịch sang tiếng Đức.
 • Bài 5: 1 đoạn văn tiếng Việt (~8–10 câu liên kết) → người học dịch toàn bộ đoạn.
 • Động từ tách trong bài dịch: đáp án mẫu phải đặt tiền tố đúng cuối mệnh đề.
@@ -5691,7 +5691,7 @@ Bài 2 — Tính từ & Đại từ sở hữu: tính từ trước danh từ (�
 
 Bài 3 — Perfekt: haben/sein + Partizip II đúng; ≥3 động từ dùng "sein" (gehen, kommen, fahren…); ≥4 động từ đều, ≥4 bất quy tắc.
 
-Bài 4 — Präteritum + Modalverben + hỗn hợp: Präteritum sein/haben/Modalverben ≥4 câu; phủ định ≥2 câu; câu hỏi ≥2 câu.
+Bài 4 — Liên từ & Mệnh đề phụ: liên từ kết hợp (und/aber/oder/denn/sondern — động từ vị trí 2 ở cả 2 vế) ≥2 câu; liên từ phụ thuộc (weil/dass/wenn/obwohl/damit/bevor/nachdem…, động từ chia đứng cuối mệnh đề phụ) ≥4 câu; cấu trúc um...zu + Infinitiv (đúng cụm động từ ở cuối) ≥2 câu; còn lại là câu ghép có liên từ khác hoặc câu đơn có trạng từ liên kết (deshalb/trotzdem/außerdem).
 
 Bài 5 — Đoạn văn dịch: 1 đoạn tiếng Việt mạch lạc (~8–10 câu), chủ đề cụ thể (kể buổi sáng, mô tả ai đó, kể chuyến đi…). Dùng nhiều từ trong danh sách. Kết hợp Präsens + Perfekt + Präteritum + tính từ + đại từ sở hữu + ≥1 động từ tách (tiền tố đúng cuối câu) trong cùng đoạn. Đặt tiêu đề cho đoạn. In rõ: "📝 Dịch toàn bộ đoạn văn sau sang tiếng Đức:" → để 15 dòng kẻ trống.
 
