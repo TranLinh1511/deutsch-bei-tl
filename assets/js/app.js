@@ -2533,10 +2533,22 @@
           freshMap.delete(item.id);
         });
         // Từ mới thêm (chưa có trong danh sách hiện tại) — nối vào cuối, giữ nguyên thứ tự cũ,
-        // nhưng chỉ nối thêm khi còn "chỗ trống" trong giới hạn wordLimit của batch hiện tại —
+        // nhưng chỉ nối thêm khi còn "chỗ trống" trong giới hạn của batch hiện tại —
         // tránh làm patch/batch phình to vượt quá giới hạn đã đặt.
+        // Lưu ý: batch CUỐI có thể có ít từ hơn wordLimit (phần dư) — không được lấy
+        // wordLimit làm đích đến, mà phải tính đúng kích thước thật của batch hiện tại,
+        // nếu không batch cuối (ví dụ 7 từ) sẽ bị "bù" lố lên thành wordLimit (ví dụ 10).
         if (wordLimit > 0) {
-          let room = Math.max(0, wordLimit - newList.length);
+          const sourceListForSize =
+            isCustomMode && window.customMaster?.length
+              ? window.customMaster
+              : fresh;
+          const batchStart = (window.batchIdx || 0) * wordLimit;
+          const targetSize = Math.max(
+            0,
+            Math.min(wordLimit, sourceListForSize.length - batchStart),
+          );
+          let room = Math.max(0, targetSize - newList.length);
           for (const f of freshMap.values()) {
             if (room <= 0) break;
             newList.push(f);
