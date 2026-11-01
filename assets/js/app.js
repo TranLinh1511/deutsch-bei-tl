@@ -10,6 +10,7 @@
       getDocs,
       deleteDoc,
       writeBatch,
+      deleteField,
       query,
       orderBy,
       onSnapshot,
@@ -1311,35 +1312,85 @@
     // "Thêm vào màn hình chính" (standalone PWA) trên iOS Safari — chúng bị chặn
     // hoàn toàn và im lặng không hiện gì cả. Thay bằng modal HTML tự dựng để
     // hoạt động ổn định trên mọi môi trường (kể cả PWA standalone).
-    // ── Khung sửa prompt (chỉ admin) ──
-    // Trả về Promise<string|null>: nội dung sau khi sửa, hoặc null nếu hủy.
-    function openPromptEditor(original, title) {
+    // ── Mẫu prompt lưu trên server (Firestore: appConfig/prompts) ──
+    // Mỗi field là 1 loại prompt (vocab, grammar, ...) chứa mẫu có {{placeholder}}.
+    // Không có field = dùng mẫu mặc định trong code. Tất cả người dùng đều đọc,
+    // chỉ admin được ghi.
+    const PROMPT_CFG_DOC = () => doc(_db, "appConfig", "prompts");
+    let _promptOverridesCache = {};
+    async function loadPromptOverrides() {
+      try {
+        const snap = await getDoc(PROMPT_CFG_DOC());
+        _promptOverridesCache = snap.exists() ? snap.data() : {};
+      } catch (e) {
+        console.warn("Không tải được mẫu prompt từ server, dùng bản đã cache/mặc định", e);
+      }
+      return _promptOverridesCache;
+    }
+    async function savePromptOverride(type, text, defaultText) {
+      // Giống hệt mặc định → xóa field trên server (tức là Reset)
+      const value = text === defaultText ? deleteField() : text;
+      await setDoc(PROMPT_CFG_DOC(), { [type]: value }, { merge: true });
+      if (text === defaultText) delete _promptOverridesCache[type];
+      else _promptOverridesCache[type] = text;
+    }
+    function fillPromptTemplate(tpl, vars) {
+      return tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) =>
+        Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m,
+      );
+    }
+
+    // ── Khung sửa mẫu prompt (chỉ admin) ──
+    // Trả về Promise<string|null>: mẫu sau khi sửa (sẽ được lưu lên server), hoặc null nếu hủy.
+    function openPromptEditor({ title, template, defaultTemplate, isCustom, placeholders }) {
       return new Promise((resolve) => {
         const overlay = document.createElement("div");
         overlay.style.cssText =
           "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100001;display:flex;align-items:center;justify-content:center;padding:12px;";
         overlay.innerHTML = `
           <div style="background:var(--modal-bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);width:100%;max-width:760px;max-height:92vh;display:flex;flex-direction:column;padding:16px;gap:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-              <div style="font-size:.95rem;font-weight:700;color:var(--tx);">✏️ Sửa prompt · <span style="color:#58a6ff"></span></div>
-              <span style="font-size:.7rem;color:var(--tx3);font-family:'DM Mono',monospace;" data-count></span>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div style="font-size:.95rem;font-weight:700;color:var(--tx);">✏️ Sửa mẫu prompt · <span data-title style="color:#58a6ff"></span></div>
+              <span data-status style="font-size:.7rem;font-family:'DM Mono',monospace;"></span>
             </div>
-            <textarea spellcheck="false" style="flex:1;min-height:50vh;width:100%;box-sizing:border-box;resize:vertical;background:var(--modal-input-bg);border:1px solid var(--input-border);color:var(--input-color);border-radius:8px;padding:10px;font-size:.8rem;line-height:1.5;font-family:'DM Mono',monospace;"></textarea>
+            <div data-ph style="font-size:.72rem;color:var(--tx3);line-height:1.6;"></div>
+            <textarea spellcheck="false" style="flex:1;min-height:48vh;width:100%;box-sizing:border-box;resize:vertical;background:var(--modal-input-bg);border:1px solid var(--input-border);color:var(--input-color);border-radius:8px;padding:10px;font-size:.8rem;line-height:1.5;font-family:'DM Mono',monospace;"></textarea>
+            <div data-warn style="font-size:.72rem;color:#f0883e;min-height:16px;"></div>
             <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;">
-              <button data-reset style="padding:8px 14px;border-radius:8px;border:1px solid #f0883e;background:transparent;color:#f0883e;font-size:.85rem;cursor:pointer;">↺ Reset</button>
+              <button data-reset style="padding:8px 14px;border-radius:8px;border:1px solid #f0883e;background:transparent;color:#f0883e;font-size:.85rem;cursor:pointer;">↺ Reset về mặc định</button>
               <div style="display:flex;gap:8px;">
                 <button data-cancel style="padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--btn-bg);color:var(--tx);font-size:.85rem;cursor:pointer;">Hủy</button>
-                <button data-ok style="padding:8px 14px;border-radius:8px;border:none;background:#58a6ff;color:#0d1117;font-weight:700;font-size:.85rem;cursor:pointer;">Copy</button>
+                <button data-ok style="padding:8px 14px;border-radius:8px;border:none;background:#58a6ff;color:#0d1117;font-weight:700;font-size:.85rem;cursor:pointer;">Lưu lên server &amp; Copy</button>
               </div>
             </div>
           </div>`;
-        overlay.querySelector("span").textContent = title || "";
+        overlay.querySelector("[data-title]").textContent = title || "";
+        overlay.querySelector("[data-ph]").textContent =
+          "Biến tự điền khi copy: " +
+          placeholders.map((k) => "{{" + k + "}}").join("  ") +
+          " — giữ nguyên các biến này nếu muốn prompt có dữ liệu từ vựng.";
         const ta = overlay.querySelector("textarea");
-        const countEl = overlay.querySelector("[data-count]");
-        const updateCount = () => (countEl.textContent = ta.value.length + " ký tự");
-        ta.value = original;
-        updateCount();
-        ta.addEventListener("input", updateCount);
+        const statusEl = overlay.querySelector("[data-status]");
+        const warnEl = overlay.querySelector("[data-warn]");
+        ta.value = template;
+        const refresh = () => {
+          const cur = ta.value;
+          if (cur === defaultTemplate) {
+            statusEl.textContent = "Đang dùng: mặc định";
+            statusEl.style.color = "var(--tx3)";
+          } else {
+            statusEl.textContent = "Bản tùy chỉnh (chưa lưu nếu bạn chưa bấm Lưu)";
+            statusEl.style.color = "#58a6ff";
+          }
+          const missing = placeholders.filter(
+            (k) => !new RegExp("\\{\\{\\s*" + k + "\\s*\\}\\}").test(cur),
+          );
+          warnEl.textContent = missing.length
+            ? "⚠️ Thiếu biến: " + missing.map((k) => "{{" + k + "}}").join(" ")
+            : "";
+        };
+        ta.addEventListener("input", refresh);
+        refresh();
         const done = (result) => {
           document.removeEventListener("keydown", onKey, true);
           overlay.remove();
@@ -1350,8 +1401,8 @@
         };
         document.addEventListener("keydown", onKey, true);
         overlay.querySelector("[data-reset]").onclick = () => {
-          ta.value = original; // quay về prompt gốc do app tạo
-          updateCount();
+          ta.value = defaultTemplate;
+          refresh();
           ta.focus();
         };
         overlay.querySelector("[data-cancel]").onclick = () => done(null);
@@ -5218,9 +5269,11 @@ In bảng phân tích đầy đủ trước khi tạo bài tập:
         }
 
         let prompt = "";
+        let tplFn = null;
+        let tplVars = {};
 
         if (promptType === "image") {
-          prompt = `Bạn là trợ lý học tiếng Đức. Tôi sẽ gửi cho bạn một hoặc nhiều hình ảnh hoặc file PDF.
+          tplFn = (v) => `Bạn là trợ lý học tiếng Đức. Tôi sẽ gửi cho bạn một hoặc nhiều hình ảnh hoặc file PDF.
 
 ## NHIỆM VỤ
 Đọc tài liệu theo đúng thứ tự xuất hiện (trái → phải, trên → dưới; PDF: từng trang theo thứ tự trang) và trích xuất các TỪ CHÍNH tiếng Đức.
@@ -5310,6 +5363,7 @@ kaputt	adj	hỏng, bị vỡ	Das Gerät ist kaputt. (Thiết bị bị hỏng.)
 - KHÔNG để trống cột câu ví dụ — bắt buộc có ví dụ cho mọi từ
 - TUYỆT ĐỐI không thêm văn bản ngoài dữ liệu, không thêm cột, không dùng markdown, không dùng JSON
 - Nếu không chắc về một từ → vẫn đưa vào, đừng tự loại bỏ`;
+            tplVars = {  };
         } else {
           if (!allW.length) {
             if (statusEl) statusEl.textContent = "⚠️ Không có từ vựng!";
@@ -5336,9 +5390,9 @@ kaputt	adj	hỏng, bị vỡ	Das Gerät ist kaputt. (Thiết bị bị hỏng.)
           const unlearnedCount = totalCount - masteredCount;
 
           if (promptType === "vocab") {
-            prompt = `BẠN LÀ CHUYÊN GIA TẠO ĐỀ THI TIẾNG ĐỨC. Tạo bộ bài tập từ vựng chuẩn Goethe-Zertifikat/telc, trình độ ${level}.
+            tplFn = (v) => `BẠN LÀ CHUYÊN GIA TẠO ĐỀ THI TIẾNG ĐỨC. Tạo bộ bài tập từ vựng chuẩn Goethe-Zertifikat/telc, trình độ ${v.level}.
 
-${levelBlock}
+${v.levelBlock}
 
 QUY TẮC NGỮ PHÁP BẮT BUỘC (áp dụng cho mọi câu):
 ① Động từ tách (trennbar): câu chính PHẢI có 2 chỗ trống — thân ở V2, tiền tố cuối câu.
@@ -5391,7 +5445,7 @@ QUY TẮC FORMAT:
 • In ấn: KHÔNG dòng trống giữa câu trong cùng bài; 1 dòng trống giữa các bài; KHÔNG lời mở đầu/kết
 • Wortkasten: liệt kê ngang, cách nhau dấu ·
 
-CẤU TRÚC BÀI TẬP (${totalCount} từ: ${unlearnedCount} chưa thuộc, ${masteredCount} đã thuộc)
+CẤU TRÚC BÀI TẬP (${v.totalCount} từ: ${v.unlearnedCount} chưa thuộc, ${v.masteredCount} đã thuộc)
 
 Bài 1 — Multiple Choice Lückentext (20 câu)
 • Mỗi câu: ngữ cảnh hoàn chỉnh + 1 chỗ trống + 4 đáp án A/B/C/D viết NGANG 1 dòng
@@ -5440,13 +5494,14 @@ Bài 8 — Brief schreiben (60–90 từ)
 
 DANH SÁCH TỪ (ưu tiên từ chưa thuộc — thứ tự đã được xáo trộn ngẫu nhiên)
 
-${vocabLines}
+${v.vocabLines}
 
-${withAnswer ? "SAU KHI IN ĐỦ ĐỀ BÀI, in ĐÁP ÁN đầy đủ theo từng bài ở cuối." : "⚠️ KHÔNG in đáp án — chỉ in đề bài."}`;
+${v.answerNote}`;
+            tplVars = { level, levelBlock, totalCount, unlearnedCount, masteredCount, vocabLines, answerNote: withAnswer ? "SAU KHI IN ĐỦ ĐỀ BÀI, in ĐÁP ÁN đầy đủ theo từng bài ở cuối." : "⚠️ KHÔNG in đáp án — chỉ in đề bài." };
           } else if (promptType === "grammar") {
-            prompt = `BẠN LÀ CHUYÊN GIA TẠO ĐỀ THI TIẾNG ĐỨC. Tạo bộ bài tập ngữ pháp NÂNG CAO chuẩn Goethe-Zertifikat/telc, trình độ ${level}.
+            tplFn = (v) => `BẠN LÀ CHUYÊN GIA TẠO ĐỀ THI TIẾNG ĐỨC. Tạo bộ bài tập ngữ pháp NÂNG CAO chuẩn Goethe-Zertifikat/telc, trình độ ${v.level}.
 
-${levelBlock}
+${v.levelBlock}
 
 QUY TẮC NGỮ PHÁP BẮT BUỘC (áp dụng cho mọi câu):
 ① Động từ tách (trennbar) — câu chính: 2 chỗ trống (thân ở V2 + tiền tố cuối).
@@ -5491,7 +5546,7 @@ QUY TẮC FORMAT:
 • In ấn: KHÔNG dòng trống giữa câu trong cùng bài; 1 dòng trống giữa các bài; KHÔNG lời mở đầu/kết
 • Wortkasten: liệt kê ngang, cách nhau ·
 
-CẤU TRÚC BÀI TẬP (${totalCount} từ: ${unlearnedCount} chưa thuộc, ${masteredCount} đã thuộc)
+CẤU TRÚC BÀI TẬP (${v.totalCount} từ: ${v.unlearnedCount} chưa thuộc, ${v.masteredCount} đã thuộc)
 
 Bài 1 — Konjugation (15 câu, 3 bảng)
 • Bảng A — Präsens (6 câu): bắt buộc có động từ bất quy tắc biến âm ở ngôi du, er
@@ -5557,17 +5612,18 @@ Bài 11 — Brief schreiben (80–120 từ)
 
 DANH SÁCH TỪ (ưu tiên từ chưa thuộc — thứ tự đã được xáo trộn ngẫu nhiên)
 
-${vocabLines}
+${v.vocabLines}
 
-${withAnswer ? "SAU KHI IN ĐỦ ĐỀ BÀI, in ĐÁP ÁN đầy đủ theo từng bài ở cuối." : "⚠️ KHÔNG in đáp án — chỉ in đề bài."}`;
+${v.answerNote}`;
+            tplVars = { level, levelBlock, totalCount, unlearnedCount, masteredCount, vocabLines, answerNote: withAnswer ? "SAU KHI IN ĐỦ ĐỀ BÀI, in ĐÁP ÁN đầy đủ theo từng bài ở cuối." : "⚠️ KHÔNG in đáp án — chỉ in đề bài." };
           } else if (promptType === "exam") {
-            prompt = `BẠN LÀ CHUYÊN GIA TẠO ĐỀ THI TIẾNG ĐỨC. Tạo đề thi thử HOÀN CHỈNH chuẩn Goethe-Zertifikat/telc, trình độ ${level}.
+            tplFn = (v) => `BẠN LÀ CHUYÊN GIA TẠO ĐỀ THI TIẾNG ĐỨC. Tạo đề thi thử HOÀN CHỈNH chuẩn Goethe-Zertifikat/telc, trình độ ${v.level}.
 
-TRÌNH ĐỘ: ${level} — ${lm.label}
-Ngữ pháp: ${lm.grammar}
-Từ vựng: ${lm.vocab} | Độ dài câu: ${lm.text} | Độ khó: ${lm.difficulty}
+TRÌNH ĐỘ: ${v.level} — ${v.lm_label}
+Ngữ pháp: ${v.lm_grammar}
+Từ vựng: ${v.lm_vocab} | Độ dài câu: ${v.lm_text} | Độ khó: ${v.lm_difficulty}
 
-⚠️ Dùng từ vựng TỰ NHIÊN, ĐÚNG TRÌNH ĐỘ ${level}, không giới hạn danh sách cụ thể.
+⚠️ Dùng từ vựng TỰ NHIÊN, ĐÚNG TRÌNH ĐỘ ${v.level}, không giới hạn danh sách cụ thể.
 ⚠️ Động từ tách trong Lückentext: câu chính → 2 chỗ trống (thân V2 + tiền tố cuối); Nebensatz → 1 chỗ trống liền khối.
 ⚠️ Động từ phản thân: câu phải có "sich" đúng ngôi.
 
@@ -5637,7 +5693,8 @@ Aufgabe 3 — Bitte/Reaktion (Yêu cầu và phản hồi)
 • 2 tình huống: đưa ra yêu cầu lịch sự + phản hồi
 • Kèm câu mẫu
 
-${withAnswer ? "SAU KHI IN ĐỦ ĐỀ BÀI, in ĐÁP ÁN đầy đủ theo từng bài ở cuối." : "⚠️ KHÔNG in đáp án — chỉ in đề bài."}`;
+${v.answerNote}`;
+            tplVars = { level, lm_label: lm.label, lm_grammar: lm.grammar, lm_vocab: lm.vocab, lm_text: lm.text, lm_difficulty: lm.difficulty, answerNote: withAnswer ? "SAU KHI IN ĐỦ ĐỀ BÀI, in ĐÁP ÁN đầy đủ theo từng bài ở cuối." : "⚠️ KHÔNG in đáp án — chỉ in đề bài." };
           } else if (promptType === "sprechen-t2") {
             // ── Build thema list from vocab ──────────────────────
             const themaWords = allW.length
@@ -5653,8 +5710,8 @@ ${withAnswer ? "SAU KHI IN ĐỦ ĐỀ BÀI, in ĐÁP ÁN đầy đủ theo từ
               ? themaWords.map((w, i) => `${i + 1}. ${w}`).join("\n")
               : "(Không có từ vựng — hãy tự chọn 6–8 từ khóa phù hợp chủ đề)";
 
-            prompt = `Bạn là giáo viên tiếng Đức luyện thi, mô phỏng đúng format kỳ thi **Start Deutsch 1 / Goethe-Zertifikat A1 — Sprechen Teil 2** (và tương đương các cấp độ khác tùy trình độ đã chọn).
-${levelBlock}
+            tplFn = (v) => `Bạn là giáo viên tiếng Đức luyện thi, mô phỏng đúng format kỳ thi **Start Deutsch 1 / Goethe-Zertifikat A1 — Sprechen Teil 2** (và tương đương các cấp độ khác tùy trình độ đã chọn).
+${v.levelBlock}
 ## FORMAT THI — SPRECHEN TEIL 2
 Mỗi người nhận thẻ có 1 từ khóa lớn + Thema. Người A đọc thẻ → đặt câu hỏi tiếng Đức → Người B trả lời câu hoàn chỉnh. Sau đó đổi vai.
 
@@ -5672,13 +5729,14 @@ Thẻ [số]: [TỪ KHÓA IN ĐẬM LỚN]
 **Yêu cầu nội dung:**
 - Từ khóa lấy từ danh sách (ưu tiên từ chưa thuộc); nếu không đủ thì chọn từ phù hợp cùng trình độ
 - Câu hỏi: tiếng Đức thật, đúng ngữ pháp (W-Frage hoặc Ja/Nein-Frage)
-- Câu trả lời: đúng ngữ pháp, tự nhiên, ≥4 từ, khớp trình độ ${level}
+- Câu trả lời: đúng ngữ pháp, tự nhiên, ≥4 từ, khớp trình độ ${v.level}
 - Hai bộ thẻ phải có Thema khác nhau (ví dụ: Alltag và Freizeit; Wohnen và Einkaufen…)
 - KHÔNG dịch sang tiếng Việt trong phần thẻ; mỗi bộ có thể in ra và dùng được ngay trong lớp
 
 ## DANH SÁCH TỪ VỰNG HIỆN TẠI
 
-${themaList}`;
+${v.themaList}`;
+            tplVars = { levelBlock, level, themaList };
           } else if (promptType === "sprechen-t3") {
             const objectWords = allW.length
               ? allW
@@ -5694,8 +5752,8 @@ ${themaList}`;
               ? objectWords.map((w, i) => `${i + 1}. ${w}`).join("\n")
               : "(Không có danh từ — AI tự chọn đồ vật phù hợp trình độ)";
 
-            prompt = `Bạn là giáo viên tiếng Đức luyện thi, mô phỏng đúng format kỳ thi **Start Deutsch 1 / Goethe-Zertifikat A1 — Sprechen Teil 3** (và tương đương các cấp độ khác tùy trình độ đã chọn).
-${levelBlock}
+            tplFn = (v) => `Bạn là giáo viên tiếng Đức luyện thi, mô phỏng đúng format kỳ thi **Start Deutsch 1 / Goethe-Zertifikat A1 — Sprechen Teil 3** (và tương đương các cấp độ khác tùy trình độ đã chọn).
+${v.levelBlock}
 ## FORMAT THI — SPRECHEN TEIL 3
 Mỗi người nhận 2 thẻ hình đồ vật. Người A giơ thẻ → nói lời nhờ/yêu cầu → Người B phản hồi đồng ý hoặc từ chối lịch sự. Sau đó đổi thẻ và đổi vai.
 
@@ -5710,7 +5768,7 @@ Thẻ [số]: 🖼 [TÊN ĐỒ VẬT tiếng Đức — in đậm]  (Loại: [de
 ├─ Lời nhờ A (lịch sự cơ bản):
 │   "Kannst du mir bitte ___ geben?" / "Darf ich ___ nehmen?" / "Hast du ___?"
 │
-├─ Lời nhờ B (lịch sự nâng cao, phù hợp trình độ ${level}):
+├─ Lời nhờ B (lịch sự nâng cao, phù hợp trình độ ${v.level}):
 │   (Konjunktiv II "Könntest du…" hoặc cấu trúc phức hơn nếu B1+)
 │
 ├─ Phản hồi đồng ý: "Ja, natürlich! Hier bitte." / "Gerne!" / "Kein Problem, ich…"
@@ -5721,13 +5779,14 @@ Thẻ [số]: 🖼 [TÊN ĐỒ VẬT tiếng Đức — in đậm]  (Loại: [de
 **Yêu cầu:**
 - Mỗi thẻ: 1 đồ vật cụ thể, hữu hình, có thể nhờ mượn trong ngữ cảnh thực tế
 - Akkusativ của mạo từ phải chính xác (den/die/das/einen/eine/ein)
-- Lời nhờ B khó hơn A nhưng không vượt ngưỡng trình độ ${level}
+- Lời nhờ B khó hơn A nhưng không vượt ngưỡng trình độ ${v.level}
 - Phản hồi đa dạng (không lặp cùng mẫu câu); toàn bộ bằng tiếng Đức
-- Nếu danh sách không đủ đồ vật phù hợp, tự bổ sung đồ vật đúng trình độ ${level}
+- Nếu danh sách không đủ đồ vật phù hợp, tự bổ sung đồ vật đúng trình độ ${v.level}
 
 ## DANH SÁCH DANH TỪ HIỆN TẠI
 
-${objectList}`;
+${v.objectList}`;
+            tplVars = { levelBlock, level, objectList };
           } else if (promptType === "translation") {
             if (!allW.length) {
               if (statusEl) statusEl.textContent = "⚠️ Không có từ vựng!";
@@ -5746,9 +5805,9 @@ ${objectList}`;
               })
               .join("\n");
 
-            prompt = `BẠN LÀ CHUYÊN GIA TẠO ĐỀ DỊCH TIẾNG ĐỨC. Tạo bộ bài tập dịch chuẩn trình độ ${level}.
+            tplFn = (v) => `BẠN LÀ CHUYÊN GIA TẠO ĐỀ DỊCH TIẾNG ĐỨC. Tạo bộ bài tập dịch chuẩn trình độ ${v.level}.
 
-${levelBlock}
+${v.levelBlock}
 
 YÊU CẦU CHUNG:
 • Tạo đúng 5 bài tập dịch, mỗi bài 10 câu (bài 5 là đoạn văn đặc biệt — xem dưới).
@@ -5777,19 +5836,26 @@ QUY TẮC FORMAT:
 3. Không dòng trống giữa câu trong cùng bài; 1 dòng trống giữa các bài.
 4. Bài 5: đoạn văn in liền, sau đó để dòng kẻ trống (không gạch chân từng câu).
 5. KHÔNG lời mở đầu, lời kết, giải thích thêm.
-6. ${withAnswer ? "In đáp án (bản dịch tiếng Đức) ở cuối sau khi in xong toàn bộ 5 bài đề." : "KHÔNG viết đáp án — chỉ in đề."}
+6. ${v.answerNote}
 
 DANH SÁCH TỪ VỰNG (ưu tiên từ chưa thuộc — đã xáo trộn ngẫu nhiên)
 
-${vocabLinesT}`;
+${v.vocabLinesT}`;
+            tplVars = { level, levelBlock, answerNote: withAnswer ? "In đáp án (bản dịch tiếng Đức) ở cuối sau khi in xong toàn bộ 5 bài đề." : "KHÔNG viết đáp án — chỉ in đề.", vocabLinesT };
           }
         }
 
-        // Admin: mở khung sửa prompt trước khi copy
-        if (
-          _isAdmin &&
-          localStorage.getItem("adminPromptEdit") === "1"
-        ) {
+        // ── Mẫu prompt: mặc định trong code, admin có thể ghi đè và lưu lên server ──
+        const defaultTpl = tplFn(
+          new Proxy({}, { get: (_, k) => "{{" + String(k) + "}}" }),
+        );
+        const overrides = await loadPromptOverrides();
+        let tpl =
+          typeof overrides[promptType] === "string" && overrides[promptType]
+            ? overrides[promptType]
+            : defaultTpl;
+
+        if (_isAdmin && localStorage.getItem("adminPromptEdit") === "1") {
           const titles = {
             vocab: "Từ vựng",
             grammar: "Ngữ pháp",
@@ -5799,7 +5865,13 @@ ${vocabLinesT}`;
             "sprechen-t3": "Sprechen Teil 3",
             translation: "Bài tập dịch",
           };
-          const edited = await openPromptEditor(prompt, titles[promptType]);
+          const edited = await openPromptEditor({
+            title: titles[promptType],
+            template: tpl,
+            defaultTemplate: defaultTpl,
+            isCustom: tpl !== defaultTpl,
+            placeholders: Object.keys(tplVars),
+          });
           if (edited === null) {
             if (statusEl) statusEl.textContent = "Đã hủy, chưa copy.";
             setTimeout(() => {
@@ -5807,8 +5879,21 @@ ${vocabLinesT}`;
             }, 3000);
             return;
           }
-          prompt = edited;
+          if (edited !== tpl) {
+            try {
+              if (statusEl) statusEl.textContent = "⏳ Đang lưu lên server...";
+              await savePromptOverride(promptType, edited, defaultTpl);
+              tpl = edited;
+            } catch (e) {
+              console.error(e);
+              if (statusEl)
+                statusEl.textContent =
+                  "❌ Không lưu được lên server (kiểm tra Firestore Rules)";
+              return;
+            }
+          }
         }
+        prompt = fillPromptTemplate(tpl, tplVars);
 
         // Copy to clipboard
         try {
