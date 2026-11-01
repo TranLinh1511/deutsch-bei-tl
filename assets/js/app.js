@@ -30,12 +30,26 @@
     // (Firebase tự khôi phục session từ IndexedDB - không cần đăng nhập lại)
     let _uid = "default";
     let _authResolved = false;
+
+    // ── ROLE ADMIN ──
+    // Xác định theo email Firebase Auth (không thể bị người dùng tự sửa như field trong Firestore).
+    // Username "linhuu8" ↔ email "linhuu8@beitl.app" (xem toFakeEmail trong login.js).
+    const ADMIN_EMAILS = ["linhuu8@beitl.app"];
+    let _isAdmin = false;
+    function _applyAdminUI() {
+      document
+        .querySelectorAll("[data-admin-only]")
+        .forEach((el) => (el.style.display = _isAdmin ? "" : "none"));
+    }
     const _authReady = new Promise((resolve) => {
       onAuthStateChanged(_auth, (user) => {
         if (!_authResolved) {
           _authResolved = true;
           if (user) {
             _uid = user.uid;
+            _isAdmin = ADMIN_EMAILS.includes((user.email || "").toLowerCase());
+            window._isAdmin = _isAdmin;
+            _applyAdminUI();
             // Đồng bộ lại localStorage để debug helper vẫn hoạt động
             localStorage.setItem("loggedUid", user.uid);
             localStorage.setItem("loggedIn", "1");
@@ -1297,6 +1311,56 @@
     // "Thêm vào màn hình chính" (standalone PWA) trên iOS Safari — chúng bị chặn
     // hoàn toàn và im lặng không hiện gì cả. Thay bằng modal HTML tự dựng để
     // hoạt động ổn định trên mọi môi trường (kể cả PWA standalone).
+    // ── Khung sửa prompt (chỉ admin) ──
+    // Trả về Promise<string|null>: nội dung sau khi sửa, hoặc null nếu hủy.
+    function openPromptEditor(original, title) {
+      return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.style.cssText =
+          "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100001;display:flex;align-items:center;justify-content:center;padding:12px;";
+        overlay.innerHTML = `
+          <div style="background:var(--modal-bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);width:100%;max-width:760px;max-height:92vh;display:flex;flex-direction:column;padding:16px;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <div style="font-size:.95rem;font-weight:700;color:var(--tx);">✏️ Sửa prompt · <span style="color:#58a6ff"></span></div>
+              <span style="font-size:.7rem;color:var(--tx3);font-family:'DM Mono',monospace;" data-count></span>
+            </div>
+            <textarea spellcheck="false" style="flex:1;min-height:50vh;width:100%;box-sizing:border-box;resize:vertical;background:var(--modal-input-bg);border:1px solid var(--input-border);color:var(--input-color);border-radius:8px;padding:10px;font-size:.8rem;line-height:1.5;font-family:'DM Mono',monospace;"></textarea>
+            <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;">
+              <button data-reset style="padding:8px 14px;border-radius:8px;border:1px solid #f0883e;background:transparent;color:#f0883e;font-size:.85rem;cursor:pointer;">↺ Reset</button>
+              <div style="display:flex;gap:8px;">
+                <button data-cancel style="padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--btn-bg);color:var(--tx);font-size:.85rem;cursor:pointer;">Hủy</button>
+                <button data-ok style="padding:8px 14px;border-radius:8px;border:none;background:#58a6ff;color:#0d1117;font-weight:700;font-size:.85rem;cursor:pointer;">Copy</button>
+              </div>
+            </div>
+          </div>`;
+        overlay.querySelector("span").textContent = title || "";
+        const ta = overlay.querySelector("textarea");
+        const countEl = overlay.querySelector("[data-count]");
+        const updateCount = () => (countEl.textContent = ta.value.length + " ký tự");
+        ta.value = original;
+        updateCount();
+        ta.addEventListener("input", updateCount);
+        const done = (result) => {
+          document.removeEventListener("keydown", onKey, true);
+          overlay.remove();
+          resolve(result);
+        };
+        const onKey = (e) => {
+          if (e.key === "Escape") { e.preventDefault(); done(null); }
+        };
+        document.addEventListener("keydown", onKey, true);
+        overlay.querySelector("[data-reset]").onclick = () => {
+          ta.value = original; // quay về prompt gốc do app tạo
+          updateCount();
+          ta.focus();
+        };
+        overlay.querySelector("[data-cancel]").onclick = () => done(null);
+        overlay.querySelector("[data-ok]").onclick = () => done(ta.value);
+        document.body.appendChild(overlay);
+        setTimeout(() => ta.focus(), 30);
+      });
+    }
+
     let _cpOverlay = null;
     function _ensureCustomPromptModal() {
       if (_cpOverlay) return _cpOverlay;
@@ -5721,6 +5785,31 @@ ${vocabLinesT}`;
           }
         }
 
+        // Admin: mở khung sửa prompt trước khi copy
+        if (
+          _isAdmin &&
+          localStorage.getItem("adminPromptEdit") === "1"
+        ) {
+          const titles = {
+            vocab: "Từ vựng",
+            grammar: "Ngữ pháp",
+            image: "Trích ảnh",
+            exam: "Đề thi thử",
+            "sprechen-t2": "Sprechen Teil 2",
+            "sprechen-t3": "Sprechen Teil 3",
+            translation: "Bài tập dịch",
+          };
+          const edited = await openPromptEditor(prompt, titles[promptType]);
+          if (edited === null) {
+            if (statusEl) statusEl.textContent = "Đã hủy, chưa copy.";
+            setTimeout(() => {
+              if (statusEl) statusEl.textContent = "";
+            }, 3000);
+            return;
+          }
+          prompt = edited;
+        }
+
         // Copy to clipboard
         try {
           await navigator.clipboard.writeText(prompt);
@@ -6654,6 +6743,23 @@ ${vocabLinesT}`;
           const withAnswer = document.getElementById("exportPromptExamAnswerToggle")?.getAttribute("data-active") === "true";
           await generateAndCopyStudyPrompt("exam", getPromptLevel(), withAnswer);
         });
+      // Admin: bật/tắt khung sửa prompt
+      (function () {
+        const btn = document.getElementById("adminPromptEditToggle");
+        if (!btn) return;
+        const paint = (on) => {
+          btn.setAttribute("data-active", String(on));
+          btn.style.background = on ? "rgba(88,166,255,0.15)" : "transparent";
+          btn.style.borderColor = on ? "#58a6ff" : "var(--border2)";
+          btn.style.color = on ? "#58a6ff" : "var(--tx3)";
+        };
+        paint(localStorage.getItem("adminPromptEdit") === "1");
+        btn.addEventListener("click", () => {
+          const on = btn.getAttribute("data-active") !== "true";
+          localStorage.setItem("adminPromptEdit", on ? "1" : "0");
+          paint(on);
+        });
+      })();
       // Answer toggle inline active/inactive handlers
       (function () {
         const answerToggles = [

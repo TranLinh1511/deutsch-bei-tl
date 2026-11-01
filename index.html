@@ -658,6 +658,20 @@
           </select>
         </div>
 
+        <!-- ── Admin: sửa prompt trước khi copy ── -->
+        <div data-admin-only style="display: none" class="flex justify-between items-center py-2 border-b border-[#21262d] min-h-[46px] gap-2">
+          <div style="flex: 1">
+            <span class="setting-label" style="font-size: 0.8rem">✏️ Sửa prompt trước khi copy</span>
+            <div style="font-size: 0.7rem; color: var(--tx3); margin-top: 1px">
+              Admin · mở khung chỉnh sửa, có nút Reset về bản gốc
+            </div>
+          </div>
+          <button id="adminPromptEditToggle" data-active="false"
+            style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--tx3);cursor:pointer;min-height:30px;">
+            Sửa
+          </button>
+        </div>
+
         <!-- ── Section: Bài tập viết ── -->
         <div style="
               font-size: 0.68rem;
